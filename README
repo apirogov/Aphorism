@@ -1,0 +1,12 @@
+requirements:
+	sinatra
+	active_record
+	sqlite3
+	rmagick
+	haml
+	json
+
+Usage:
+	run server with:
+		ruby main.rb
+

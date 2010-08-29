@@ -1,0 +1,26 @@
+
+%form#loginform{:method => "post", :onsubmit => "return false;"}
+  Nickname:
+  %input#nickname{:type=>"text", :name=>"nickname"}
+  %span#nickcheck
+  %br
+  Password:
+  %input#password{:type=>"password", :name=>"password"}
+  %span#wrongpwd
+  #register
+    %span#pwdcheck
+    %br
+    Repeat password:
+    %input#password_repeat{:type=>"password", :name=>"password_repeat"}
+    %span#pwdcontrol
+    %br
+    %img#captchapic
+    %br
+    %input#chash{:style=>"display:none;", :type=>"text"}
+    %input#captcha{:type=>"text", :size=>"8"}
+    %span#captchacontrol
+    %input#new_captcha{:type=>"button", :value=>"New Pic"}
+  %br
+  %input#cancel{:type=>"button", :value=>"Cancel"}
+  %input#login{:type=>"submit", :value=>"OK"}
+

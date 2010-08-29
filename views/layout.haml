@@ -1,0 +1,56 @@
+!!! 5
+%html
+  %head
+    %title Aphorism - Sinatra Web Chat App
+    %meta{"http-equiv".to_sym=>"Content-Type", :content=>"text/html; charset=utf-8"}
+    %meta{:name => "author", :content => "Anton Pirogov"}
+    %meta{:name => "description", :content => "Sinatra Web Chat"}
+    %meta{:name => "keywords", :content => "web, chat"}
+    %meta{:name => "date", :content => "#{require 'date'; Date.today.to_s}"}
+    %link{:rel=>"icon", :href=>"gfx/favicon.png", :type=>"image/x-png"}
+    %link{:rel=>"stylesheet", :type=>"text/css", :href=>"stylesheet.css", :title=>"default", :media=>"all"}
+    -#<link rel="alternate stylesheet" type="text/css" href="stylefile.css" title="alternate">
+
+    -#jquery (and later jquery-ui) stuff
+    %script{:type=>"text/javascript", :src=>"js/lib/jquery-1.4.2.min.js"}
+    %script{:type=>"text/javascript", :src=>"js/lib/jquery.cookie.js"}
+    -#cryptography stuff
+    %script{:type=>"text/javascript", :src=>"js/lib/gibberish-aes.js"}
+    %script{:type=>"text/javascript", :src=>"js/lib/sha256.js"}
+    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/jsbn.js"}
+    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/jsbn2.js"}
+    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/prng4.js"}
+    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/rng.js"}
+    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/rsa.js"}
+    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/rsa2.js"}
+    -#my wrappers for rsa stuff and stuff for communication crypting
+    %script{:type=>"text/javascript", :src=>"js/crypt.js"}
+    %script{:type=>"text/javascript", :src=>"js/communication.js"}
+    -#finally page stuff
+    %script{:type=>"text/javascript", :src=>"js/login.js"}
+
+  %body
+    %noscript
+      #nojswarning
+        You need a JavaScript-enabled browser to use that program!
+        %br
+        %br
+    #header
+      #title
+        %h1 Aphorism
+        %small Your secure IM
+      %span#headinfo{:style=>'color:red;font-weight:bold;'} <br/>This page is still under heavy construction!
+      #loginstate
+        %a{:href=>"javascript:Login.showLogin();"} Login
+        %script{:type=>'text/javascript'} if ($.cookie("nickname") != null) $("#loginstate").html("Hello, "+$.cookie("nickname")+"! <a href=\"javascript:Login.logout();\">Logout</a>");
+    #content
+      = yield
+    #footer
+      #credits
+        %p
+          %a{:href => "http://validator.w3.org/check?uri=referer"}
+            %img{:src => "http://userpage.fu-berlin.de/frers/valid-html5.gif", :alt => "Valid HTML5!"}
+          %a{:href => "http://jigsaw.w3.org/css-validator/check/referer"}
+            %img{:src => "http://jigsaw.w3.org/css-validator/images/vcss", :alt => "CSS is valid!"}
+          %br
+          = "Copyright (C) #{Date.today.year.to_s} Anton Pirogov"

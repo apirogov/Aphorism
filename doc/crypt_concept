@@ -1,0 +1,34 @@
+
+user registers - RSA pair generated
+
+server gets:
+private key AEScrypted with users password + public key + loginpwd-SHA256
+-> only user on client side can decrypt stuff
+
+login:
+  server checks loginpwd-hash
+  ok -> sends crypted private key
+  sends random session communication key crypted with public key
+  
+  client: decrypts private key with loginpwd
+          decrypts sessioncommunicationkey with private key
+
+-> from now on communication between server and client
+   is crypted with AES with the shared communication key!!!
+
+-> THE GOOD THING: No middleman can do anything with the traffic 
+	-> client <--> browser communication secure
+
+communication client<->client: PGP-like:
+	Alice requests Bob's public key from server
+	random message crypt password generated
+	message crypted with AES
+	password crypted with Bob's public key
+	packaged -> sent to server -> sent to Bob
+	Bob decrypts password with private key
+	Bob decrypts message
+-> THE GOOD THING: The server just knows that information is
+	shared between Alice and Bob, but can't read it!!!
+
+only weak spot (I found) - the case a server is compromised and is serving wrong public keys
+to get access to information... but a server should not be hacked anyway :)

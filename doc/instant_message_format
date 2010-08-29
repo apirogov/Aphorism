@@ -1,0 +1,25 @@
+Everything's JSON
+
+Transported over the SecureMessage layer (AES encrypted)
+
+inside:
+
+{ "cmd": "send_im",
+  "to": nickname of addressee,
+  "message": {
+				"type":	"im_text",	//other values: "auth_request", "auth_grant", "auth_withdraw"/"auth_deny" and maybe other im_* types
+									//auth grant and auth withdraw/deny have instead of data segment just "from" (nickname of source)
+									//auth_deny is only an anwer for auth_request (state was pending) auth_withdraw is to remove permission (state was true/given_permission)
+			    "data": output from SecureMessage.pack_message (stringified)
+  }
+}
+
+SecureMessage.pack_message data:
+{
+	"header": {
+				"info":		RSA encrypted nickname and timestamp {"from": nick, "timestamp": epoch time}
+				"aeskey":	RSA encrypted aeskey of the message
+				"sha256":	RSA encrypted sha256 hash of the text
+	},
+	"cipher": AES encrypted message itself
+}
