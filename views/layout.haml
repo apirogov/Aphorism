@@ -12,18 +12,18 @@
     -#<link rel="alternate stylesheet" type="text/css" href="stylefile.css" title="alternate">
 
     -#jquery (and later jquery-ui) stuff
-    %script{:type=>"text/javascript", :src=>"js/lib/jquery-1.4.2.min.js"}
-    %script{:type=>"text/javascript", :src=>"js/lib/jquery.cookie.js"}
-    -#cryptography stuff
-    %script{:type=>"text/javascript", :src=>"js/lib/gibberish-aes.js"}
-    %script{:type=>"text/javascript", :src=>"js/lib/sha256.js"}
-    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/jsbn.js"}
-    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/jsbn2.js"}
-    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/prng4.js"}
-    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/rng.js"}
-    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/rsa.js"}
-    %script{:type=>"text/javascript", :src=>"js/lib/js_rsa/rsa2.js"}
-    -#my wrappers for rsa stuff and stuff for communication crypting
+    %script{:type=>"text/javascript", :src=>"js/jquery-1.4.2.min.js"}
+    %script{:type=>"text/javascript", :src=>"js/jquery.cookie.js"}
+    -#dependencies for my cryptography stuff
+    %script{:type=>"text/javascript", :src=>"js/cryptolibs/gibberish-aes.js"}
+    %script{:type=>"text/javascript", :src=>"js/cryptolibs/sha256.js"}
+    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/jsbn.js"}
+    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/jsbn2.js"}
+    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/prng4.js"}
+    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/rng.js"}
+    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/rsa.js"}
+    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/rsa2.js"}
+    -#my wrappers for crypt stuff and stuff for communication crypting
     %script{:type=>"text/javascript", :src=>"js/crypt.js"}
     %script{:type=>"text/javascript", :src=>"js/communication.js"}
     -#finally page stuff
@@ -42,7 +42,6 @@
       %span#headinfo{:style=>'color:red;font-weight:bold;'} <br/>This page is still under heavy construction!
       #loginstate
         %a{:href=>"javascript:Login.showLogin();"} Login
-        %script{:type=>'text/javascript'} if ($.cookie("nickname") != null) $("#loginstate").html("Hello, "+$.cookie("nickname")+"! <a href=\"javascript:Login.logout();\">Logout</a>");
     #content
       = yield
     #footer

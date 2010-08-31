@@ -6,8 +6,12 @@
 class User < ActiveRecord::Base
   #shortcut for getting a user by name (instead of by id)
   def self.getUserWithNick(name)
-    result = self.find(:all,:conditions => "nickname = \"#{name}\"").first
-    p result
+
+#   old active_record style: (I let this here just in case...)
+#    result = self.find(:all,:conditions => "nickname = \"#{name}\"").first
+    #
+    result = self.where(:nickname => name).first
+#    p result   #testing
     result
   end
 end
@@ -17,7 +21,7 @@ require 'fileutils'
 FileUtils.mkdir("db") if File.exists?("db")==false
 
 #connect to database
-ActiveRecord::Base.establish_connection(:adapter=>:sqlite3, :database=>"db/data.sqlite3")
+ActiveRecord::Base.establish_connection(:adapter=>"sqlite3", :database=>"db/data.sqlite3")
 
 #new database? create empty tables and stuff...
 if File.exists?("db/data.sqlite3")==false

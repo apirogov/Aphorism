@@ -1,25 +1,38 @@
-Everything's JSON
+"Message" is what gets appended to message queues of contacts:
 
-Transported over the SecureMessage layer (AES encrypted)
+//Messages without body
+"message": {
+				"type":	"state_broadcast"/"auth_grant"/"auth_deny"/"auth_withdraw",
+												//auth_deny is only an anwer for auth_request
+												//(state was pending) auth_withdraw is to remove
+												//permission (state was true/given_permission)
+	  			"from":	nickname
+				(for state_broadcast:			//(this is sent to all online contacts on login and logout)
+				"state": "online"/"offline" )
+  }
+}
 
-inside:
-
-{ "cmd": "send_im",
-  "to": nickname of addressee,
-  "message": {
-				"type":	"im_text",	//other values: "auth_request", "auth_grant", "auth_withdraw"/"auth_deny" and maybe other im_* types
-									//auth grant and auth withdraw/deny have instead of data segment just "from" (nickname of source)
-									//auth_deny is only an anwer for auth_request (state was pending) auth_withdraw is to remove permission (state was true/given_permission)
-			    "data": output from SecureMessage.pack_message (stringified)
+//Messages with content body (text)
+"message": {
+				"type":	"im_text"/"auth_request",
+			    "data": output from SecureMessage.pack_message
   }
 }
 
 SecureMessage.pack_message data:
 {
 	"header": {
-				"info":		RSA encrypted nickname and timestamp {"from": nick, "timestamp": epoch time}
-				"aeskey":	RSA encrypted aeskey of the message
-				"sha256":	RSA encrypted sha256 hash of the text
+				"info":	{			RSA-encrypted info:
+					"from":			nickname,
+					"timestamp":	Time of message creation (unix epoch time)
+				}
+				"aeskey":			RSA encrypted aeskey of the message
+				"signature":		Signature (private-key-encrypted sha256 hash)
 	},
 	"cipher": AES encrypted message itself
 }
+
+//other values: auth_request, auth_grant, auth_withdraw/auth_deny and maybe other im_* types
+//state_broadcast, auth grant/withdraw/deny have instead of data segment just "from" (nickname of source)
+
+

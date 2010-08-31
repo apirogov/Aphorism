@@ -1,6 +1,8 @@
 requirements:
+ruby >=1.9
+gems:
 	sinatra
-	active_record
+	active_record >= 3.0.0
 	sqlite3
 	rmagick
 	haml

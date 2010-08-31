@@ -30,5 +30,8 @@ communication client<->client: PGP-like:
 -> THE GOOD THING: The server just knows that information is
 	shared between Alice and Bob, but can't read it!!!
 
-only weak spot (I found) - the case a server is compromised and is serving wrong public keys
-to get access to information... but a server should not be hacked anyway :)
+Security concerns:
+	http://stackoverflow.com/questions/3604582/which-attacks-are-possible-concerning-my-security-layer-concept
+	http://stackoverflow.com/questions/3591342/how-to-prevent-a-man-in-the-middle-attack-in-case-of-a-compromised-server
+
+MAYBE I will one day port the whole thing to HTTPS...

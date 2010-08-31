@@ -1,6 +1,7 @@
 #!/usr/bin/env ruby
 #Sinatra Group Chat app
 #Copyright (C) 2010 Anton Pirogov
+#Licensed under the GPLv3 or later
 
 require 'rubygems' if RUBY_VERSION < "1.9"
 

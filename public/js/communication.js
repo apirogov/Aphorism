@@ -5,7 +5,7 @@
 
 /* This stuff works only after authentication
  * -> user logged in, got his encrypted private key and an encrypted session encryption password  (and the sessionid)
- * |-->	the sessionid and nickname are stored in cookies to be validated by the server for each request
+ * |-->	the sessionid and nickname are stored to be validated by the server for each request
  *  	(the server stores nick,sessionid,IP and the random session password as sessiondata)
  * -> decrypted it with login password (AES) -> SecureMessage.privkey (Private Key of the user (RSA))
  * -> decrypted session password with private key (RSA) -> SecureMessage.scpwd (Session Communication Password (AES))
@@ -23,25 +23,16 @@ var SecureMessage = {
 	 */
 	sync_send_json: function(object) {
 		if (typeof SecureMessage.scpwd == 'undefined')
-			if ($.cookie("scpwd") == null)
 				return false;	//no session running
-			else
-				SecureMessage.scpwd = $.cookie("scpwd");	//load it from the cookie
 		try {
 			crypted = GibberishAES.enc( JSON.stringify(object), SecureMessage.scpwd )
 		} catch(e) {
 			return false; //failure
 		}
 
-		//remove privkey and sessionpwd from cookies for the request (HTTP header...)
-		var privkeytmp = $.cookie("privkey");
-		var scpwdtmp = $.cookie("scpwd");
-		$.cookie("privkey",null);
-		$.cookie("scpwd",null);
-
 		SecureMessage.sync_send_json.retval = true;
 		$.ajax({url: '/secure', 		//synchronous ajax request, POST data: nick, sessionid and crypted data
-				data: {"nickname": $.cookie("nickname"), "sessionid": $.cookie("sessionid"), "data": crypted},
+				data: {"nickname": SecureMessage.nickname, "sessionid": SecureMessage.sessionid, "data": crypted},
 				success: function(data) {
 					try {
 						var obj = JSON.parse(GibberishAES.dec(data, SecureMessage.scpwd))
@@ -55,67 +46,34 @@ var SecureMessage = {
 				async:	false
 			});
 		
-		//insert back privkey...
-		$.cookie("privkey",privkeytmp)
-		$.cookie("scpwd",scpwdtmp)
-		privkeytmp = null;
-		scpwdtmp = null;
-
 		return SecureMessage.sync_send_json.retval;
 	},
 
-	/* return random hex string of specified length */
-	randomHex: function(len) {
-		var str = "";
-		for(var i=0; i<len; i++)
-			str += Math.floor(Math.random()*16).toString(16);
-		return str;
-	},
-
 	/* encrypt an instant message (data string) to be send to someone */
-	pack_message: function(from_nick, datastr, pubkey_addressee) {
+	pack_message: function(from_nick, datastr, pubkey_addressee, own_priv) {
 		var aeskey = SecureMessage.randomHex(32);
-		var datahash = SHA256(datastr); //TODO: make signature instead of raw hash -> requires private key...
-		var currtime = new Date().getTime();
+		var signature = RSA.sign_sha256(datastr, own_priv); //generate signature
+
+		var currtime = new Date().getTime();			   //make timestamp
 		var info = {"from": from_nick, "timestamp": currtime};
 
 		//encrypt message
 		var cipherdata = GibberishAES.enc(datastr, aeskey);
 
-		//encrypt header data
+		//encrypt AES key and info
 		try {
 			aeskey = RSA.encrypt(aeskey, pubkey_addressee);
-			datahash = RSA.encrypt(datahash, pubkey_addressee);
 			info = RSA.encrypt(JSON.stringify(info), pubkey_addressee);
 		} catch(e) { return false } //invalid public key
 
 		//prepare header
-		var header = { "info": info, "aeskey": aeskey, "sha256": datahash }
+		var header = { "info": info, "aeskey": aeskey, "signature": signature }
 
 		//return json string with encrypted header and message
 		var cipherstr = JSON.stringify({"header": header, "cipher": cipherdata});
 		return cipherstr; //return JSON string with the encrypted data
 	},
 
-	/* decrypt a recieved instant message */
-	unpack_message: function(cipherstr, privkey) {
-		var data = JSON.parse(cipherstr);
-
-		try {
-			//decrypt header data
-			data.header.info = JSON.parse(RSA.decrypt(data.header.info, privkey));
-			data.header.aeskey = RSA.decrypt(data.header.aeskey, privkey);
-			data.header.sha256 = RSA.decrypt(data.header.sha256, privkey);
-		
-			//decrypt message
-			var text = GibberishAES.dec(data.cipher, data.header.aeskey);
-		} catch(e) { return false } //something was invalid :(
-
-		if (SHA256(text) != data.header.sha256)
-			return false; //data corrupted - hash doesnt match!
-		
-		return {"from": data.header.from, "data": text};	//fine :) -> return decrypted IM text/data
-	}
 };
 
 /* create namespace if does not exist */
@@ -183,21 +141,18 @@ AphorismServer = {
 
 	/* input: nick... function accepts a request_auth */
 	grant_auth: function(nick) {
-		return SecureMessage.sync_send_json({
-					"cmd": "grant_auth",
-					"nickname": nick
-					}
-				);
+		return SecureMessage.sync_send_json({ "cmd": "grant_auth", "nickname": nick });
 	 },
 
 	/* input: nick... function denies a request_auth / withdraws an accepted request_auth */
 	withdraw_auth: function(nick) {
-		return SecureMessage.sync_send_json({
-					"cmd": "withdraw_auth",
-					"nickname": nick
-					}
-				);
-	 }
+		return SecureMessage.sync_send_json({ "cmd": "withdraw_auth", "nickname": nick });
+	 },
+
+	/* get the online state for a specific user seperately (e.g. after adding) */
+	check_online_state: function(nick) {
+		return SecureMessage.sync_send_json({ "cmd": "check_online_state", "nickname": nick });
+	},
 };
 
 
@@ -206,6 +161,7 @@ if (AphorismClient == null || typeof(AphorismClient) != "object") { var Aphorism
 
 /* this namespace has the client "frontends" for the server functions */
 AphorismClient = {
+	
 	process_queue: function() {
 		if (typeof AphorismClient.stoppolling != 'undefined' && AphorismClient.stoppolling == true)
 			return true;
@@ -220,7 +176,7 @@ AphorismClient = {
 			$("#content").append("<div class=\"message\">"+JSON.stringify(currmsg)+"</div>");
 		}
 
-		//now ready to get new ones --> init next polling in 3 sec
+		//finished --> init next polling in 3 sec
 		setTimeout("AphorismClient.process_queue()", 3000);
 
 		return true;
@@ -246,6 +202,20 @@ AphorismClient = {
 		setTimeout("AphorismClient.process_queue()", 3000);
 
 		return true;
+	},
+
+	shutdown: function() {
+		AphorismClient.stop_polling();
+
+		//send logout signal to server
+		$.get("/logout?nickname="+SecureMessage.nickname+"&sessionid="+SecureMessage.sessionid);
+		
+		//just to make sure its gone
+		SecureMessage.privkey = null;
+		SecureMessage.scpwd = null;
+		SecureMessage.nickname = null;
+		SecureMessage.sessionid = null;
 	}
+
 }
 

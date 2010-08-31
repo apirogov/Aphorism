@@ -39,7 +39,7 @@ Login = {
 		$("#nickcheck").html("checking...");
 
 		Login.checkNickname.running = true; /* Lock */
-		$.post("/check_nickname",{name: $("#nickname").attr("value")}, Login.checkNicknameCallback);
+		$.get("/check_nickname",{name: $("#nickname").attr("value")}, Login.checkNicknameCallback);
 		return true;
 	},
 
@@ -165,27 +165,36 @@ Login = {
 		} else {	/* response = session id, session crypt pwd, (if login -> crypted private key) */
 			data = JSON.parse(text);
 	
-			$.cookie("nickname",$("#nickname").attr("value"));
+			//store nickname and session id
+			SecureMessage.nickname = $("#nickname").attr("value");
+			SecureMessage.sessionid = data.sid;
 	
-			$.cookie("sessionid",data.sid);
-	
-			//if its login and not register -> cprivkey is sent too
+			//if its login and not register -> cprivkey is sent too -> unencrypt
 			if (typeof data.cprivkey != 'undefined') {
 				SecureMessage.privkey = JSON.parse(GibberishAES.dec(data.cprivkey, SecureMessage.usrpwd));
 				SecureMessage.usrpwd = null; //delete saved cleartext user password
 			}
-			$.cookie("privkey",JSON.stringify(SecureMessage.privkey));
 			
-			SecureMessage.scpwd = RSA.decrypt(data.enc_scpwd, SecureMessage.privkey);	// session crypt password not as cookie cause must stay in client only
-			$.cookie("scpwd",SecureMessage.scpwd);
+			//session encryption password
+			SecureMessage.scpwd = RSA.decrypt(data.enc_scpwd, SecureMessage.privkey);
 	
-			$("#loginstate").html("Hello, "+$.cookie("nickname")+"! <a href=\"javascript:Login.logout();\">Logout</a>");
+			//update login link
+			$("#loginstate").html("Hello, "+SecureMessage.nickname+"! <a href=\"javascript:Login.logout();\">Logout</a>");
+
+			AphorismClient.initialize();	//start up the client
+			$(window).unload(function() {
+					//terminate!
+					Login.logout();
+					return true;
+					alert("Your session has been successfully terminated!");
+					});
+
 		}
 	},
 
 	/* load the login/registration form */
 	showLogin: function() {
-		$.post("/show_login_form", function(text) {
+		$.get("/show_login_form", function(text) {
 					$("#loginstate").html(text);
 					Login.initLoginFormHandlers();
 				}
@@ -200,12 +209,8 @@ Login = {
 
 	/* End session */
 	logout: function() {
-		$.cookie("nickname",null);
-		$.cookie("sessionid",null);
-		$.cookie("scpwd",null);
-		$.cookie("privkey",null);
-		$.get("/logout?nickname="+$.cookie("nickname")+"&sessionid="+$.cookie("sessionid"));
-		location.reload();
+		AphorismClient.shutdown();	//Shutdown the client object properly
+		location.reload();			//should empty the javascript variables -> session data
 	},
 
 	/* Set event handlers for the login form */
@@ -218,8 +223,4 @@ Login = {
 		$("#password_repeat").keyup(Login.comparePwds);
 		$("#captcha").keyup(Login.checkCaptcha);
 	}
-}
-
-if ($.cookie("nickname") != null) { // session running
-	$("#loginstate").html("Hello, "+$.cookie("nickname")+"! <a href=\"javascript:Login.logout();\">Logout</a>");
 }

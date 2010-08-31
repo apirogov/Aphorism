@@ -28,35 +28,49 @@ RSA = {
   		return res;
 	},
 
+	/* own implementations of sign and verify */
 			 // TODO: MAKE VERIFY AND SIGN WORK
-	/* encrypting with private key */
-//	sign: function(text,key) {
-//		var rsa = new RSAKey();
-//		rsa.setPublic(key.n, key.d); // use d instead of e -> signing
-//		
-//		var res = rsa.encrypt(text);
-//		return res;
-//	},
 
-	/* decrypting with public key */
-//	verify: function(cipher, key) {
-//		var rsa = new RSAKey();
-//
-		/* recalculate the stuff, with e and d swapped.. */
-//		var e = new BigInteger(key.e, 16);
-//		var p = new BigInteger(key.p, 16);
-//		var q = new BigInteger(key.q, 16);
-//		var dmp1 = e.mod(p.subtract(new BigInteger("1",10)));
-//		var dmq1 = e.mod(q.subtract(new BigInteger("1",10)));
-//		var coeff = new BigInteger("1",10);
-//		coeff = coeff.divide(q).mod(p);
+	/* Sign with private key - SHA256 hash (http://www.di-mgt.com.au/rsa_alg.html#signpkcs1) */
+	sign_sha256: function(text,key) {
+		var H = SHA256(text);
+		var T = "3031300d060960864801650304020105000420" + H;
+		var keylen = key.n.length / 2;
 
-// 		rsa.setPrivateEx(key.n, key.d, e.toString(16), p.toString(16), q.toString(16),
-//				dmp1.toString(16), dmq1.toString(16), coeff.toString(16));
+		var EB = "0001"
+		var padlen = keylen - T.length/2 - 3;
+		for (var i=0; i<padlen; i++)
+			EB += "ff"	//padding for the byte string to match key size
+		EB += "00"+T
 
-//		var res = rsa.decrypt(cipher);
-//		return res;
-//	},
+		var num = new BigInteger(EB, 16);	//load digest into int
+		// load private key numbers
+ 		var d = new BigInteger(key.d, 16);
+		var n = new BigInteger(key.n, 16);
+
+		//calculate result - return message signature
+		var ret = num.modPow(d,n).toString(16);
+		while (ret.length < keylen*2)	//add leading 0 to match required size
+			ret = '0'+ret
+		return ret
+	},
+
+	/* Verify with public key - SHA256 as hash */
+	verify_sha256: function(text, signature, key) {
+		//decrypt
+		var data = new BigInteger(signature, 16);
+		//load public key numbers
+		var e = new BigInteger(key.e, 16);
+		var n = new BigInteger(key.n, 16);
+		//calculate
+		var sig = data.modPow(e,n).toString(16);
+
+		//extract hash (last 32 bytes are the sha256)
+		var hash = sig.substring(sig.length-64);
+
+		//return true if hash matches
+		return hash == SHA256(text);
+	},
 	
 	/* return key data (all numbers as hex) (with private) */
 	gen_keys: function(bits) {
@@ -81,6 +95,61 @@ RSA = {
 	/* just exponent and modulus - public key */
 	get_public_key: function(privkey) {
 		return {"e": privkey.e, "n": privkey.n };
+	},
+
+	/* MESSAGE FORGING FOR CLIENT->CLIENT */
+
+	/* return random hex string of specified length */
+	randomHex: function(len) {
+		var str = "";
+		for(var i=0; i<len; i++)
+			str += Math.floor(Math.random()*16).toString(16);
+		return str;
+	},
+
+	/* encrypt an instant message (data string) to be send to someone */
+	pack_message: function(from_nick, datastr, pubkey_addressee, own_priv) {
+		var aeskey = RSA.randomHex(32);
+		var signature = RSA.sign_sha256(datastr, own_priv); //generate signature
+
+		var currtime = new Date().getTime();			   //make timestamp
+		var info = {"from": from_nick, "timestamp": currtime};
+
+		//encrypt message
+		var cipherdata = GibberishAES.enc(datastr, aeskey);
+
+		//encrypt AES key and info
+		try {
+			aeskey = RSA.encrypt(aeskey, pubkey_addressee);
+			info = RSA.encrypt(JSON.stringify(info), pubkey_addressee);
+		} catch(e) { return false } //invalid public key
+
+		//prepare header
+		var header = { "info": info, "aeskey": aeskey, "signature": signature }
+
+		//return json string with encrypted header and message
+		var cipherstr = JSON.stringify({"header": header, "cipher": cipherdata});
+		return cipherstr; //return JSON string with the encrypted data
+	},
+
+	/* decrypt a recieved instant message and verify -> return false or object */
+	unpack_message: function(cipherstr, privkey, pubkey_source) {
+		var data = JSON.parse(cipherstr);
+
+		try {
+			//decrypt header data
+			data.header.info = JSON.parse(RSA.decrypt(data.header.info, privkey));
+			data.header.aeskey = RSA.decrypt(data.header.aeskey, privkey);
+		
+			//decrypt message
+			var text = GibberishAES.dec(data.cipher, data.header.aeskey);
+		} catch(e) { return false } //something was invalid :(
+
+		if (!RSA.verify_sha256(text, data.header.signature, pubkey_source))
+			return false; //data corrupted - hash doesnt match!
+		//
+		//fine :) -> return decrypted IM text/data
+		return {"from": data.header.info.from, "timestamp": data.header.info.timestamp, "data": text};
 	}
 }
 

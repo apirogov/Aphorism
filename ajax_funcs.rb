@@ -3,8 +3,8 @@
 #Copyright (C) 2010 Anton Pirogov
 #Licensed under the GPLv3 or later
 
-#TODO: jquery-ui stuff on clientside! Sign/Verify in crypt.js!
-#TODO: Authorization of contacts!
+#TODO: jquery-ui stuff on clientside!
+#TODO: Reordering... make new file... put helper funcs in
 
 #stores the running sessions
 $sessions = Hash.new
@@ -42,7 +42,7 @@ def start_session(nick)
   return 'error'
 end
 
-#control session
+#check session validity
 def check_sessionid
   #get nick and session id
   nick = params[:nickname]
@@ -57,13 +57,13 @@ def check_sessionid
   return false
 end
 
-####### LEVEL 1 routes -> NO authentication
+####### LEVEL 1 routes -> NO authentication, GET
 get '/captcha' do
   response['Content-Type'] = 'application/json; charset=utf-8'
   AntiSpam.generate_picture
 end
 
-post '/check_nickname' do
+get '/check_nickname' do
   if User.getUserWithNick(params[:name])==nil
     res='free'
   else
@@ -72,11 +72,16 @@ post '/check_nickname' do
   res
 end
 
-post '/show_login_form' do
+get '/show_login_form' do
   haml :loginform, :layout => false
 end
 
-####### LEVEL 2 routes -> login
+#DEBUG: to test whether logged in or not  (provide nick and sessionid over GET!)
+get '/check' do
+  check_sessionid.to_s
+end
+
+####### LEVEL 2 routes -> login process
 post '/login' do
   #check user password hash
   usr = User.getUserWithNick(params[:nickname])
@@ -114,8 +119,7 @@ post '/register' do
   ret
 end
 
-###### LEVEL 3 routes => uncrypted but authenticated
-#
+###### TODO: move to Lv 4
 get '/logout' do
   if check_sessionid #check whether valid logged in
     $sessions.delete(params[:nickname]) #remove session associacion
@@ -126,6 +130,7 @@ get '/logout' do
   ret
 end
 
+#TODO: move this to level 4
 #Delete user from database, remove session
 post '/delete_account' do
   #check whether logged in and correct password hash supplied
@@ -140,11 +145,6 @@ post '/delete_account' do
     ret='error'
   end
   ret
-end
-
-#DEBUG: to test whether logged in or not
-get '/check' do
-  check_sessionid.to_s
 end
 
 ###### LEVEL 4 rountes -> ENCRYPTED
@@ -192,6 +192,9 @@ def evaluate_command(data)
   end
   if cmd == 'send_im'
     return send_im(ownnick, data['to'], data['message'])
+  end
+  if cmd == 'check_online_state'
+    return check_online_state(ownnick,data['nickname'])
   end
 
   #for demonstration - secure calculator...
@@ -304,11 +307,18 @@ def get_publickey(nick)
   return {'response'=>true, 'pubkey' => JSON.parse(usr.pubkey)}   #return the pubkey (JSON string -> JSON)
 end
 
-#client requests own contact list
+#client requests own contact list -> return list with nicks, permissions and online states
 def pull_clist(nick)
   usr = User.getUserWithNick(nick)
   return ret_fail('not found') if usr == nil  #user not found (can only occur after own account deletion...as a bug)
   clist = JSON.parse(usr.clist) #load JSON string of clist, make hash
+
+  #check the online states of the users and add to the list to be returned
+  clist['state'] = Array.new
+  clist['nicks'].each{ |contactnick|
+    clist['state'].push check_online_state(nick, contactnick, clist)['state']
+  }
+
   return {'response'=>true, 'clist'=>clist}       #return data
 end
 
@@ -425,3 +435,45 @@ def withdraw_auth(from, to)
 
   return ret_success
 end
+
+#check online state of a contact
+#(second argument is provided when called with pull_clist to save a db request)
+def check_online_state(source,nick,srcclist=nil)
+  #normal call from client - get contact list to check authorization
+  if srcclist == nil
+    usr = User.getUserWithNick(source)
+    return ret_fail(source+' not found') if usr == nil  #user not found (can only occur after own account deletion...as a bug)
+    srcclist = JSON.parse(usr.clist) #load JSON string of clist, make hash
+  end
+
+  #if user not in contact list -> request denied
+  index = clist['nicks'].index(nick)
+  return ret_fail(nick+' not in your contact list') if index==nil
+
+  #check now authorization - if no authorization, dont tell state (no permission) but thats not a ret_fail!
+  return {'response'=>true,'state'=>'hidden'} if clist['authstate'][index] != 't'
+
+  #everything's fine -> get state
+
+  if $sessions.index(nick) != nil #that user has a session running -> online
+    state = 'online'
+  else
+    state = 'offline'
+  end
+
+  return {'response'=>true, 'state'=>state}
+end
+
+#helper function  - used by login/logout
+#send notification to contacts on login/logout
+#nick - who logged in/out?, state - 'online'/'offline'
+def broadcast_state(nick, state)
+  #get users clist, get the contacts clists and check their authorization to get the state
+  #if its fine -> send the message to their queues
+
+  return true
+end
+
+
+#TODO: check idle time (no request), kill sessions idle for 1 min
+#TODO: got_message message to notify the sender that a message was successfully delivered (identified by.. hash?)

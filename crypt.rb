@@ -50,8 +50,8 @@ module AES
   end
 end
 
-#Equivalent to RSA in crypt.js -> compatible (a key is a JSON with the numbers in hex -> {"e": "ffa3452356fa", ...}
-#instead of JSON key is stored in hash
+#Equivalent to RSA in crypt.js -> compatible
+#(Key format is hash/JSON with the numbers in hex -> {"e": "ffa3452356fa", ...})
 module RSA
   ############ PRIVATE METHODS NOT TO BE USED OUTSIDE ############
 
@@ -112,19 +112,19 @@ module RSA
     return rsa.private_decrypt(data)  #decrypt
   end
 
-  #encrypt with private key
-  def RSA.sign(text, key)
+  #sign the sha256 hash of message with private key (PKCS1v1.5)
+  def RSA.sign_sha256(text, key)
     rsa = set_rsa_key(key)            #init key and stuff
-    cipher = rsa.private_encrypt(text) #encrypt
-    cipher = bin2hex(cipher)          #convert binary data to hex
-    return cipher
+    return bin2hex(rsa.sign(OpenSSL::Digest::SHA256.new, text))
   end
 
-  #decrypt with public key
-  def RSA.verify(cipher, key)
+  #verify the sha256 hash with private key => return true if verification succeeded (hashes match)
+  def RSA.verify_sha256(text, signature, key)
     rsa = set_rsa_key(key)            #init key and stuff
-    data = hex2bin(cipher)            #convert from hex to binary again
-    return rsa.public_decrypt(data)   #decrypt
+    data = hex2bin(signature)         #convert from hex to binary again
+
+    #decrypt and return result of comparison of the decrypted and provided hash
+    return bin2hex(rsa.public_decrypt(data))[38..-1] == OpenSSL::Digest::SHA256.hexdigest(text)
   end
 
   ############# KEY GENERATION ##################
