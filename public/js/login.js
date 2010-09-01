@@ -21,7 +21,7 @@ Login = {
 		return true;
 	},
 
-	/* invalid nick, free or registered nick? TODO: invalid */
+	/* invalid nick, free or registered nick? TODO: invalid nickname check */
 	checkNickname: function() {
 		if (typeof Login.checkNickname.running == 'undefined')
 			Login.checkNickname.running = false;
@@ -75,7 +75,7 @@ Login = {
 		}
 	},
 
-	/* password safe enough? TODO! */
+	/* password safe enough? TODO! (in the end... would annoy while testing) */
 	checkPwd: function() {
 		$("#wrongpwd").html(""); /* empty it (user wants to retry) */
 	

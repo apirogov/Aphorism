@@ -18,7 +18,8 @@ require 'antispam.rb'     #captcha generation
 require 'dbinterface.rb'  #inits/loads database, gives functions for accessing
 require 'crypt.rb'        #counterpart to crypt.js
 
-require 'ajax_funcs.rb'   #all AJAX calls... so kinda everything
+require 'secure_requests.rb'  #everything running after authentication (helper methods)
+require 'ajax_funcs.rb'       #Public stuff, login+authentication, secure route
 
 #establish the main page route (the rest is ajax)
 get '/stylesheet.css' do
