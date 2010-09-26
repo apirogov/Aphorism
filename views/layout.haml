@@ -14,19 +14,8 @@
     -#jquery (and later jquery-ui) stuff
     %script{:type=>"text/javascript", :src=>"js/jquery-1.4.2.min.js"}
     %script{:type=>"text/javascript", :src=>"js/jquery.cookie.js"}
-    -#dependencies for my cryptography stuff
-    %script{:type=>"text/javascript", :src=>"js/cryptolibs/gibberish-aes.js"}
-    %script{:type=>"text/javascript", :src=>"js/cryptolibs/sha256.js"}
-    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/jsbn.js"}
-    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/jsbn2.js"}
-    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/prng4.js"}
-    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/rng.js"}
-    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/rsa.js"}
-    %script{:type=>"text/javascript", :src=>"js/cryptolibs/js_rsa/rsa2.js"}
-    -#my wrappers for crypt stuff and stuff for communication crypting
-    %script{:type=>"text/javascript", :src=>"js/crypt.js"}
+    -#page stuff
     %script{:type=>"text/javascript", :src=>"js/communication.js"}
-    -#finally page stuff
     %script{:type=>"text/javascript", :src=>"js/login.js"}
 
   %body
@@ -38,7 +27,7 @@
     #header
       #title
         %h1 Aphorism
-        %small Your secure IM
+        %small Your webbased IM
       %span#headinfo{:style=>'color:red;font-weight:bold;'} <br/>This page is still under heavy construction!
       #loginstate
         %a{:href=>"javascript:Login.showLogin();"} Login

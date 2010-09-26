@@ -1,5 +1,5 @@
 /* Functions for the Login/Registration form
- * -> checking data, registering new users, logging in and setting everything for SecureMessage to work
+ * -> checking data, registering new users, logging in and setting everything for IMCommand to work
  * Copyright (C) 2010 Anton Pirogov
  * Licensed under the GPLv3 or later
  */
@@ -15,8 +15,8 @@ Login = {
 
 		$.getJSON("/captcha", function(data) {
 					/* get json data -> set pic into img and hash into field for control */
+					$("#capid").attr("value", data.id);	
 					$("#captchapic").attr("src","data:image/png;base64,"+data.blob);
-					$("#chash").attr("value", data.hash);	
 				});
 		return true;
 	},
@@ -105,26 +105,11 @@ Login = {
 		return true;
 	},
 
-	checkCaptcha: function() {
-		if ($("#chash").attr("value") == SHA256($("#captcha").attr("value"))) {
-			$("#captchacontrol").css("color","green");
-			$("#captchacontrol").html("ok");
-			return true;
-		}
-
-		/* failed captcha */
-		$("#captchacontrol").css("color","red");
-		$("#captchacontrol").html("not matching!");
-		return false;
-	},
-
 	/* button to login or register */
 	loginButtonClicked: function() {
 		if ($("#nickcheck").text()=="registered") {
-			SecureMessage.usrpwd = $("#password").attr("value");	// store user password in js to use for privkey decryption
-	
 			nick =	$("#nickname").attr("value");			//nickname
-			pass =	SHA256($("#password").attr("value"));	//hashed password
+			pass =	$("#password").attr("value");	//hashed password
 	
 			$.post("/login",
 					{
@@ -133,22 +118,18 @@ Login = {
 					}, Login.loginCallback);
 	
 		} else if ($("#nickcheck").text()=="free") {
-			if( Login.checkPwd() && Login.comparePwds() && Login.checkCaptcha() ) {
-	
-				SecureMessage.usrpwd = $("#password").attr("value");	// store user password in js to use for privkey decryption
-				SecureMessage.privkey = RSA.gen_keys(); //Generate and save new key
-	
+			if( Login.checkPwd() && Login.comparePwds() ) {
 				nick =	$("#nickname").attr("value");			//nickname
-				pass =	SHA256($("#password").attr("value"));	//hashed password
-				pubkey = JSON.stringify(RSA.get_public_key(SecureMessage.privkey));	//public key
-				cprivkey = GibberishAES.enc(JSON.stringify(SecureMessage.privkey), SecureMessage.usrpwd); //AES crypted private key for storage only...
-	
+				pass =	$("#password").attr("value");	//hashed password
+				cid = $("#capid").attr("value");	//Captcha id
+				cval = $("#captcha").attr("value");	//Captcha text
+
 				$.post("/register",
 						{
 							nickname:	nick,
 					  		password:	pass,
-							pubkey:		pubkey,
-							cprivkey:	cprivkey
+							capid:		cid,
+							capval:		cval				
 						}, Login.loginCallback);
 			}
 		}
@@ -166,20 +147,11 @@ Login = {
 			data = JSON.parse(text);
 	
 			//store nickname and session id
-			SecureMessage.nickname = $("#nickname").attr("value");
-			SecureMessage.sessionid = data.sid;
-	
-			//if its login and not register -> cprivkey is sent too -> unencrypt
-			if (typeof data.cprivkey != 'undefined') {
-				SecureMessage.privkey = JSON.parse(GibberishAES.dec(data.cprivkey, SecureMessage.usrpwd));
-				SecureMessage.usrpwd = null; //delete saved cleartext user password
-			}
-			
-			//session encryption password
-			SecureMessage.scpwd = RSA.decrypt(data.enc_scpwd, SecureMessage.privkey);
+			IMCommand.nickname = $("#nickname").attr("value");
+			IMCommand.sessionid = data.sid;
 	
 			//update login link
-			$("#loginstate").html("Hello, "+SecureMessage.nickname+"! <a href=\"javascript:Login.logout();\">Logout</a>");
+			$("#loginstate").html("Hello, "+IMCommand.nickname+"! <a href=\"javascript:Login.logout();\">Logout</a>");
 
 			AphorismClient.initialize();	//start up the client
 			$(window).unload(function() {
@@ -194,11 +166,10 @@ Login = {
 
 	/* load the login/registration form */
 	showLogin: function() {
-		$.get("/show_login_form", function(text) {
-					$("#loginstate").html(text);
-					Login.initLoginFormHandlers();
-				}
-				);
+		$("#loginstate").load('/show_login_form', function(data) {
+				Login.initLoginFormHandlers()
+			}
+			);
 	},
 
 	/* cancel -> set back Login hyperlink */
@@ -221,6 +192,5 @@ Login = {
 		$("#nickname").keyup(Login.checkNickname);
 		$("#password").keyup(Login.checkPwd);
 		$("#password_repeat").keyup(Login.comparePwds);
-		$("#captcha").keyup(Login.checkCaptcha);
 	}
 }

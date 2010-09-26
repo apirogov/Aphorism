@@ -3,41 +3,54 @@
 #Copyright (C) 2010 Anton Pirogov
 #Licensed under the GPLv3 or later
 
-class User < ActiveRecord::Base
-  #shortcut for getting a user by name (instead of by id)
-  def self.getUserWithNick(name)
+require 'dm-core'
+require 'dm-migrations'
 
-#   old active_record style: (I let this here just in case...)
-#    result = self.find(:all,:conditions => "nickname = \"#{name}\"").first
-    #
-    result = self.where(:nickname => name).first
-#    p result   #testing
-    result
-  end
+#Absolute path to database
+dbpath = "#{Dir.pwd}/test.db"
+
+#DataMapper::Logger.new($stdout, :debug)    #Init logger if you like
+
+#Setup connection to database
+DataMapper.setup(:default, "sqlite3://#{dbpath}")   #dm-sqlite-adapter gem required
+
+#initialize models
+
+class User
+  include DataMapper::Resource
+
+  property :id, Serial, :key => true
+  property :nickname, String    #nickname (login)
+  property :pwdhash, String     #SHA256 of password (login)
+
+  has n, :contacts
+  has n, :messages
 end
 
-#create folder if it dies not exist
-require 'fileutils'
-FileUtils.mkdir("db") if File.exists?("db")==false
+class Contact
+  include DataMapper::Resource
 
-#connect to database
-ActiveRecord::Base.establish_connection(:adapter=>"sqlite3", :database=>"db/data.sqlite3")
+  belongs_to :user
 
-#new database? create empty tables and stuff...
-if File.exists?("db/data.sqlite3")==false
-  ActiveRecord::Schema.define do
-    create_table :users do |t|
-      t.column :nickname, :string #nickname (login name)
-      t.column :pwdhash, :string  #SHA256 of password (for server authentication)
-      t.column :pubkey, :string   #public key (JSON string)
-      t.column :cprivkey, :string #aes crypted private RSA key (AES crypted JSON string)
-      t.column :clist, :string    #contact list with nicks and corresponding authorization states
-                                  #as JSON -> {"nicks": ["a","b","c"], "authstate": ["t","p","f"]}
-                                  #t=true f=false p=pending (request sent)
-      t.column :msgqueue, :string #contains the messages from other contacts awaiting delivery
-                                  #as JSON -> {"messages": [<message1JSONstring>, ...]}
-    end
-  end
+  property :id, Serial, :key => true
+  property :userid, Integer         #contact user id (would be more elegant as association but doesnt work oO)
+  property :authgiven, String #authorization state from buddy to contact -> "t"=true, "p"=pending, "f"= false
 end
 
+class Message
+  include DataMapper::Resource
+
+  belongs_to :user
+
+  property :id, Serial, :key => true
+  property :data, String
+end
+
+#apply models (validation etc.)
+DataMapper.finalize
+
+#if no database file found -> initialize
+if File.exists?(dbpath) == false
+  DataMapper.auto_migrate!                            #(re)initialize database (destructive!)
+end
 

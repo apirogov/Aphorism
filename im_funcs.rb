@@ -4,14 +4,7 @@
 #Licensed under the GPLv3 or later
 
 #here all the fun happens :) this is an interface for the whole functionality...
-#input and output are encrypted with the communication password for the session
-#the data contains all commands and data as JSON... responses are encrypted JSON objects too
-
-#hash => JSON => AES with session communication password => THAT will be returned
-def prepare_response(hash)
-  scpwd = $sessions[params[:nickname]][:scpwd]
-  return AES.enc(JSON.generate(hash), scpwd)
-end
+#the data contains all commands and data as JSON... responses are JSON objects too
 
 #evaluates the cmd string and does stuff and gives responses
 def evaluate_command(data)
@@ -54,7 +47,7 @@ def evaluate_command(data)
     return delete_account(ownnick, params[:password]) #huge cleanup function
   end
 
-  #for demonstration - secure calculator...
+  #for demonstration - calculator...
   if cmd == 'calc'
     return calc(data['expression'])
   end
@@ -75,7 +68,7 @@ def ret_success
   {'response'=>true}
 end
 
-#demonstration and testing of the crypt tunnel - a calculator
+#demonstration and testing of the interface - a calculator
 def calc(expression)
   value = 0
   #check that its just numbers and + - * / and () -> no XSS xD
@@ -90,67 +83,64 @@ end
 def add_contact(ownnick, person)
   return ret_fail('can not add yourself') if person == ownnick   #you cant add yourself !
 
-  usr = User.getUserWithNick(person)
+  usr = User.first(:nickname=>person)
   return ret_fail('no such user') if usr == nil          #user does not exist !
 
-  ownusr = User.getUserWithNick(ownnick)  #get own record to get the contact list
-  clist = JSON.parse(ownusr.clist)
-  return ret_fail('already in list') if clist['nicks'].index(person) != nil
+  ownusr = User.first(:nickname => ownnick)  #get own record to get the contact list
+  return ret_fail('already in list') if ownusr.contacts.first(:userid => usr.id) != nil
 
-  clist['nicks'].push person  #add user to contact list
-  clist['authstate'].push 'f' #not authorized yet
-  ownusr.clist = JSON.generate(clist) #update record
-  ownusr.save
+  c = ownusr.contacts.new
+  c.userid = usr.id
+  puts usr.id
+  puts c.userid
+  c.authgiven = 'f'
+  c.save
 
   return ret_success
 end
 
 #client removes contact
 def remove_contact(ownnick, person)
-  usr = User.getUserWithNick(ownnick)
+  usr = User.first(:nickname=>ownnick)
   return ret_fail('not found') if usr == nil  #user not found (can only occur after own account deletion...as a bug)
 
-  clist = JSON.parse(usr.clist) #get the contact list
-  index = clist['nicks'].index(person)
-  return ret_fail('not in clist') if index == nil  #user not in contact list
+  otherusr = User.first(:nickname=>person)
+
+  c = usr.contacts.first(:userid => otherusr.id)
+
+  return ret_fail('not in clist') if c == nil  #user not in contact list
 
   #check whether the other user is given authorization
-  otherusr = User.getUserWithNick(person)
   if otherusr != nil      #user exists? if not, doesnt matter...
-    hisclist = JSON.parse(otherusr.clist)
-    hisindex = hisclist['nicks'].index(ownnick)
-    if hisindex != nil    #requesting user is in the clist of the user to be removed?
-      auth = hisclist['authstate'][hisindex]
-      return ret_fail('withdraw authorization first!') if auth == 't'
+    hiscontact = otherusr.contacts.first(:userid => usr.id)
+    if hiscontact != nil    #requesting user is in the clist of the user to be removed?
+      return ret_fail('withdraw authorization first!') if hiscontact.authgiven == 't'
+      hiscontact.authgiven = 'f'
+      hiscontact.save
     end
   end
 
-  #remove user from list and update database record
-  clist['nicks'].delete_at(index)
-  clist['authstate'].delete_at(index)
-  usr.clist = JSON.generate(clist)
-  usr.save
+  #remove user from list
+  c.destroy
 
   return ret_success
 end
 
-#client requests a public key from a user
-def get_publickey(nick)
-  usr = User.getUserWithNick(nick)                                #find requested user in database
-  return ret_fail('not found') if usr == nil  #user not found
-  return {'response'=>true, 'pubkey' => JSON.parse(usr.pubkey)}   #return the pubkey (JSON string -> JSON)
-end
-
 #client requests own contact list -> return list with nicks, permissions and online states
 def pull_clist(nick)
-  usr = User.getUserWithNick(nick)
+  usr = User.first(:nickname=>nick)
   return ret_fail('not found') if usr == nil  #user not found (can only occur after own account deletion...as a bug)
-  clist = JSON.parse(usr.clist) #load JSON string of clist, make hash
+
+  clist = Hash.new
+  clist['nicks'] = []
+  usr.contacts.each do |c|
+    clist['nicks'].push User.first(:id => c.userid).nickname
+  end
 
   #check the online states of the users and add to the list to be returned
   clist['state'] = Array.new
   clist['nicks'].each{ |contactnick|
-    clist['state'].push check_online_state(nick, contactnick, clist)['state']
+    clist['state'].push check_online_state(nick, contactnick)['state']
   }
 
   return {'response'=>true, 'clist'=>clist}       #return data
@@ -161,34 +151,31 @@ end
 def send_im(fromnick,tonick,message)
   return ret_fail('can not send IM to yourself') if fromnick==tonick      #self-explainatory
 
-  usr = User.getUserWithNick(fromnick)                                     #find own record
+  usr = User.first(:nickname=>fromnick)                                     #find own record
   return ret_fail('own user not found') if usr == nil  #must be error
 
-  clist = JSON.parse(usr.clist)
-  index = clist['nicks'].index(tonick)
-  return ret_fail('not in list') if index == nil     #that nick is not in contact list!
+  tousr = User.first(:nickname=>tonick)
+  return ret_fail('addressee not found') if tousr == nil  #must be error
 
-  tousr = User.getUserWithNick(tonick)
-  return ret_fail('addressee not found') if usr == nil  #must be error
+  contact = usr.contacts.first(:userid => tousr.id)
+  return ret_fail('not in list') if contact == nil     #that nick is not in contact list!
+
 
   if message['type'] != 'auth_request'     #Normal message
-    state = clist['authstate'][index]
-    return ret_fail('not authorized') if state != 't'   #failure: not authorized!
+    return ret_fail('not authorized') if contact.authgiven != 't'   #failure: not authorized!
   else                                     #its an authorization request!
-    return ret_fail('already given') if clist['authstate'][index] == 't'  #already has permission!
-    return ret_fail('already sent') if clist['authstate'][index] == 'p'  #already sent a request!
+    return ret_fail('already given') if contact.authgiven == 't'  #already has permission!
+    return ret_fail('already sent') if contact.authgiven == 'p'  #already sent a request!
 
     #ok... its a valid auth request... so set state to 'p' and update db record
-    clist['authstate'][index] = 'p' #awaiting to be answered
-    usr.clist = JSON.generate(clist)
-    usr.save
+    contact.authgiven = 'p' #awaiting to be answered
+    contact.save
   end
 
   #append message to addressees message queue, update database record
-  addresseequeue = JSON.parse(tousr.msgqueue)
-  addresseequeue['messages'].push(message)
-  tousr.msgqueue = JSON.generate(addresseequeue)
-  tousr.save
+  msg = tousr.messages.new
+  msg.data = JSON.generate({'from'=>fromnick, 'message'=>message})
+  msg.save
 
   return ret_success
 end
@@ -196,19 +183,16 @@ end
 #client asks for all queued messages from other users (IMs and auth requests and stuff)
 #returns empty list if empty... so always succeeds
 def pull_queue(ownnick)
-  usr = User.getUserWithNick(ownnick)                                      #find own record
+  usr = User.first(:nickname=>ownnick)                                      #find own record
   return ret_fail(ownnick+' not found in db') if usr == nil  #must be error
 
-  queue = JSON.parse(usr.msgqueue)                                         #get queue
-
-  #to prevent unneccessary rewriting of the record...
-  if queue['messages'].length != 0
-    #not empty -> remove data from the database
-    usr.msgqueue = "{\"messages\":[]}"                                       #empty queue
-    usr.save                                                                 #update database record
+  messages = []
+  usr.messages.each do |msg|
+    messages << msg.data
+    msg.destroy
   end
 
-  return {'response'=>true, 'messages'=> queue['messages']}                #return message queue
+  return {'response'=>true, 'messages'=> messages}                #return message queue
 end
 
 #client asks another user for authorization
@@ -219,73 +203,64 @@ end
 
 #client gives permission to contact
 def grant_auth(from, to)
-  ownusr = User.getUserWithNick(from)
-  ownclst = JSON.parse(ownusr.clist)
-  index = ownclist['nicks'].index(to)
-  return ret_fail(to+' not in your contact list') if index==nil #first add the user before accepting auth_request!
+  ownusr = User.first(:nickname=>from)
 
-  tousr = User.getUserWithNick(to)
+  tousr = User.first(:nickname=>to)
   return ret_fail('user not found!') if tousr == nil    #the user is not in the database
 
+  contact = ownusr.contacts.first(:userid => tousr.id)
+  return ret_fail(to+' not in your contact list') if contact==nil #first add the user before accepting auth_request!
+
+
   #check the authorization state
-  toclist = JSON.parse(tousr.clist)
-  index = toclist['nicks'].index(from)
-  return ret_fail('not in list of '+to) if index==nil
-  return ret_fail(to+' is already authorized') if toclist['authstate'][index]=='t'
-  return ret_fail('authorization was not requested') if toclist['authstate'][index]=='f' #makes no sense to grant before getting a request...
+  hiscontact = tousr.contacts.first(:userid => ownusr.id)
+  return ret_fail('not in list of '+to) if hiscontact==nil
+  return ret_fail(to+' is already authorized') if hiscontact.authgiven =='t'
+  return ret_fail('authorization was not requested') if hiscontact.authgiven=='f' #makes no sense to grant before getting a request...
 
   #so state is pending -> lets change to given
-  toclist['authstate'][index] = 't'
-  tousr.clist = JSON.generate(toclist)
+  hiscontact.authgiven = 't'
+  hiscontact.save
+
   #append notification to queue and save db record
-  toqueue = JSON.parse(tousr.msgqueue)
-  toqueue['messages'].push({'type'=>'auth_grant','from'=>from})
-  tousr.msgqueue = JSON.generate(toqueue)
-  tousr.save
+  tousr.messages.create(:data => JSON.generate({'type'=>'auth_grant','from'=>from}))
 
   return ret_success
 end
 
 #client withdraws permission to contact / denies a request...
 def withdraw_auth(from, to)
-  tousr = User.getUserWithNick(to)
+  tousr = User.first(:nickname=>to)
   return ret_fail('user not found!') if tousr == nil    #the user is not in the database
 
   #check the authorization state
-  toclist = JSON.parse(tousr.clist)
-  index = toclist['nicks'].index(from)
-  return ret_fail('not in list of '+to) if index==nil
-  return ret_fail(to+' is not authorized') if toclist['authstate'][index]=='f'  #nothing to withdraw
+  contact = tousr.contacts.first(:userid => User.first(:nickname=>from).id)
+  return ret_fail('not in list of '+to) if contact == nil
+  return ret_fail(to+' is not authorized') if contact.authgiven=='f'  #nothing to withdraw
 
   #set state to f (no permission to write to "from")
-  oldstate = toclist['authstate'][index]  #save old state
-  toclist['authstate'][index] = 'f'
+  oldstate = contact.authgiven  #save old state
+  contact.authgiven = 'f'
+  contact.save
+
   #append notification...
-  toqueue = JSON.parse(tousr.msgqueue)
   oldstate == 'p' ? type = 'auth_deny' : type = 'auth_withdraw' #if pending -> deny, if given -> withdraw
-  toqueue['messages'].push({'type'=>type, 'from'=>from})
-  tousr.msgqueue = JSON.generate(toqueue)
-  tousr.save
+  tousr.messages.create(:data => JSON.generate({'type'=>type, 'from'=>from}))
 
   return ret_success
 end
 
 #check online state of a contact
-#(second argument is provided when called with pull_clist to save a db request)
 def check_online_state(source,nick,srcclist=nil)
-  #normal call from client - get contact list to check authorization
-  if srcclist == nil
-    usr = User.getUserWithNick(source)
-    return ret_fail(source+' not found') if usr == nil  #user not found (can only occur after own account deletion...as a bug)
-    srcclist = JSON.parse(usr.clist) #load JSON string of clist, make hash
-  end
+  usr = User.first(:nickname=>source)
+  return ret_fail(source+' not found') if usr == nil  #user not found (can only occur after own account deletion...as a bug)
 
   #if user not in contact list -> request denied
-  index = clist['nicks'].index(nick)
-  return ret_fail(nick+' not in your contact list') if index==nil
+  contact = usr.contacts.first(:userid => User.first(:nickname => nick).id)
+  return ret_fail(nick+' not in your contact list') if contact == nil
 
   #check now authorization - if no authorization, dont tell state (no permission) but thats not a ret_fail!
-  return {'response'=>true,'state'=>'hidden'} if clist['authstate'][index] != 't'
+  return {'response'=>true,'state'=>'hidden'} if contact.authgiven != 't'
 
   #everything's fine -> get state
 
@@ -311,7 +286,7 @@ end
 
 def delete_account(nick, password)
   #check whether logged in and correct password hash supplied
-  usr = User.getUserWithNick(nick)
+  usr = User.first(:nickname=>nick)
   return ret_fail('user does not exist!') if usr==nil #wtf?
 
   return ret_fail('password incorrect!') if password==usr.pwdhash #not matching
@@ -319,12 +294,10 @@ def delete_account(nick, password)
   #TODO: remove user from all his contacts and stuffz
 
   #ok... remove account :(
-  User.delete(usr.id) #remove user from database
+  usr.destroy #remove user from database
 
-  #remove session (thread safe)
-  $semaphore.synchronize do
-    $sessions.delete(nick) #remove session associacion
-  end
+  #remove session
+  $sessions.delete(nick) #remove session associacion
 
   return ret_success
 end

@@ -51,7 +51,7 @@ module AntiSpam
     gc.pointsize(20)
     gc.font_style(Magick::ItalicStyle)
 
-    #draw the captcha number into 1 of the 9 divisions
+    #draw the captcha number int] 1 of the 9 divisions
     x, y = offsetx*(w/4) + rand(w/4-20)+20,  offsety*(h/3) + rand(h/3-10)+10
         gc.text(x, y, captcha_number)
 
@@ -63,10 +63,9 @@ module AntiSpam
     blob = canvas.to_blob         #get binary data of pic
 
     blob = Base64.encode64(blob)  #code base64 for data uri
-    blob.gsub!("\n","\\n")    #escape for json string
-    hash = Digest::SHA2.new(256).hexdigest(captcha_number) #get sha256 hash
-    #return JSON with data and hash
-    return "{\n\t\"blob\": \"#{blob}\",\n\t\"hash\": \"#{hash}\"\n}"
+    #blob.gsub!("\n","\\n")    #escape for json string
+    #return data and number
+    return [blob, captcha_number]
   end
 
 end
